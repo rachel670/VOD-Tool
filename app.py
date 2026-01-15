@@ -94,7 +94,7 @@ def parse_rfms_excel(filepath):
         # Filter: has Credits value AND Description contains AUTO PMT-CHASE or SURPLUS
         if pd.notna(credits_val) and credits_val != '':
             desc_str = str(desc_val) if pd.notna(desc_val) else ''
-            if 'AUTO PMT-CHASE' in desc_str.upper() or 'SURPLUS' in desc_str.upper():
+            if 'AUTO PMT' in desc_str.upper() or 'SURPLUS' in desc_str.upper():
                 # Format date
                 if pd.notna(date_val):
                     if isinstance(date_val, datetime):
