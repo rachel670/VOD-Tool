@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>VOD Automation Tool</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e4e8ec 100%);
+            min-height: 100vh;
+            padding: 40px 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+        .header img {
+            max-width: 200px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #4a6741;
+            font-size: 28px;
+            margin-bottom: 8px;
+        }
+        .header p {
+            color: #666;
+            font-size: 14px;
+        }
+        .upload-card {
+            background: white;
+            border-radius: 16px;
+            padding: 40px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+        }
+        .drop-zone {
+            border: 2px dashed #ccc;
+            border-radius: 12px;
+            padding: 60px 40px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+        .drop-zone:hover, .drop-zone.dragover {
+            border-color: #4a6741;
+            background: #f8faf8;
+        }
+        .drop-zone svg {
+            width: 48px;
+            height: 48px;
+            color: #999;
+            margin-bottom: 16px;
+        }
+        .drop-zone h3 {
+            color: #333;
+            margin-bottom: 8px;
+        }
+        .drop-zone p {
+            color: #888;
+            font-size: 14px;
+        }
+        .drop-zone input {
+            display: none;
+        }
+        .btn {
+            display: inline-block;
+            background: #4a6741;
+            color: white;
+            padding: 12px 32px;
+            border-radius: 8px;
+            border: none;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 16px;
+        }
+        .btn:hover {
+            background: #3d5636;
+        }
+        .btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .btn-secondary {
+            background: #6c757d;
+        }
+        .btn-secondary:hover {
+            background: #5a6268;
+        }
+        .file-list {
+            margin-top: 20px;
+        }
+        .file-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            margin-bottom: 8px;
+        }
+        .file-item .name {
+            font-size: 14px;
+            color: #333;
+            flex: 1;
+        }
+        .file-item .remove {
+            color: #dc3545;
+            cursor: pointer;
+            padding: 4px 8px;
+            font-size: 18px;
+        }
+        .results {
+            margin-top: 30px;
+        }
+        .results h3 {
+            color: #333;
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .result-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 16px;
+            background: #f8faf8;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 4px solid #4a6741;
+        }
+        .result-item.error {
+            background: #fff5f5;
+            border-left-color: #dc3545;
+        }
+        .result-info {
+            flex: 1;
+        }
+        .result-info .filename {
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 4px;
+        }
+        .result-info .details {
+            font-size: 12px;
+            color: #666;
+        }
+        .download-btn {
+            background: #4a6741;
+            color: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            text-decoration: none;
+            font-size: 13px;
+            font-weight: 500;
+        }
+        .download-btn:hover {
+            background: #3d5636;
+        }
+        .batch-actions {
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+            text-align: center;
+        }
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 40px;
+        }
+        .loading.active {
+            display: block;
+        }
+        .spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #4a6741;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 16px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .hidden {
+            display: none;
+        }
+        .summary {
+            background: #e8f5e9;
+            padding: 16px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        .summary strong {
+            color: #4a6741;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <img src="/static/logo-1.png" alt="ECS Logo">
+            <h1>VOD Automation Tool</h1>
+            <p>Upload RFMS Excel files to generate Verification of Deposit PDFs</p>
+        </div>
+        
+        <div class="upload-card">
+            <div class="drop-zone" id="dropZone">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                </svg>
+                <h3>Drop Excel files here</h3>
+                <p>or click to browse (.xlsx files only)</p>
+                <input type="file" id="fileInput" multiple accept=".xlsx">
+            </div>
+            
+            <div class="file-list hidden" id="fileList"></div>
+            
+            <div style="text-align: center; margin-top: 20px;">
+                <button class="btn hidden" id="processBtn">Generate VOD PDFs</button>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Processing files...</p>
+            </div>
+            
+            <div class="results hidden" id="results">
+                <div class="summary" id="summary"></div>
+                <h3>
+                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Generated Files
+                </h3>
+                <div id="resultsList"></div>
+                <div class="batch-actions hidden" id="batchActions">
+                    <button class="btn" id="downloadAllBtn">Download All (ZIP)</button>
+                    <button class="btn btn-secondary" id="resetBtn" style="margin-left: 10px;">Process More Files</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const fileList = document.getElementById('fileList');
+        const processBtn = document.getElementById('processBtn');
+        const loading = document.getElementById('loading');
+        const results = document.getElementById('results');
+        const resultsList = document.getElementById('resultsList');
+        const batchActions = document.getElementById('batchActions');
+        const downloadAllBtn = document.getElementById('downloadAllBtn');
+        const resetBtn = document.getElementById('resetBtn');
+        const summary = document.getElementById('summary');
+        
+        let selectedFiles = [];
+        let processedFiles = [];
+
+        // Drag and drop
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        dropZone.addEventListener('click', () => fileInput.click());
+        fileInput.addEventListener('change', () => handleFiles(fileInput.files));
+
+        function handleFiles(files) {
+            const xlsxFiles = Array.from(files).filter(f => f.name.endsWith('.xlsx'));
+            if (xlsxFiles.length === 0) {
+                alert('Please select .xlsx files only');
+                return;
+            }
+            selectedFiles = [...selectedFiles, ...xlsxFiles];
+            updateFileList();
+        }
+
+        function updateFileList() {
+            if (selectedFiles.length === 0) {
+                fileList.classList.add('hidden');
+                processBtn.classList.add('hidden');
+                return;
+            }
+            
+            fileList.classList.remove('hidden');
+            processBtn.classList.remove('hidden');
+            
+            fileList.innerHTML = selectedFiles.map((f, i) => `
+                <div class="file-item">
+                    <span class="name">${f.name}</span>
+                    <span class="remove" onclick="removeFile(${i})">&times;</span>
+                </div>
+            `).join('');
+        }
+
+        function removeFile(index) {
+            selectedFiles.splice(index, 1);
+            updateFileList();
+        }
+
+        processBtn.addEventListener('click', async () => {
+            if (selectedFiles.length === 0) return;
+            
+            dropZone.classList.add('hidden');
+            fileList.classList.add('hidden');
+            processBtn.classList.add('hidden');
+            loading.classList.add('active');
+            
+            const formData = new FormData();
+            selectedFiles.forEach(f => formData.append('files', f));
+            
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await response.json();
+                showResults(data);
+            } catch (error) {
+                alert('Error processing files: ' + error.message);
+                resetUI();
+            }
+        });
+
+        function showResults(data) {
+            loading.classList.remove('active');
+            results.classList.remove('hidden');
+            
+            summary.innerHTML = `<strong>${data.successful}</strong> of <strong>${data.total}</strong> files processed successfully`;
+            
+            processedFiles = data.results.filter(r => r.success).map(r => r.path);
+            
+            resultsList.innerHTML = data.results.map(r => {
+                if (r.success) {
+                    return `
+                        <div class="result-item">
+                            <div class="result-info">
+                                <div class="filename">${r.output}</div>
+                                <div class="details">Source: ${r.original} • ${r.transaction_count} qualifying transaction(s)</div>
+                            </div>
+                            <a href="/download/${r.path}" class="download-btn" download>Download</a>
+                        </div>
+                    `;
+                } else {
+                    return `
+                        <div class="result-item error">
+                            <div class="result-info">
+                                <div class="filename">${r.original}</div>
+                                <div class="details">Error: ${r.error}</div>
+                            </div>
+                        </div>
+                    `;
+                }
+            }).join('');
+            
+            if (processedFiles.length > 1) {
+                batchActions.classList.remove('hidden');
+            } else {
+                batchActions.classList.remove('hidden');
+                downloadAllBtn.classList.add('hidden');
+            }
+        }
+
+        downloadAllBtn.addEventListener('click', async () => {
+            const response = await fetch('/download-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ files: processedFiles })
+            });
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `VOD_Batch_${new Date().toLocaleDateString().replace(/\//g, '-')}.zip`;
+            a.click();
+        });
+
+        resetBtn.addEventListener('click', resetUI);
+
+        function resetUI() {
+            selectedFiles = [];
+            processedFiles = [];
+            dropZone.classList.remove('hidden');
+            fileList.classList.add('hidden');
+            processBtn.classList.add('hidden');
+            loading.classList.remove('active');
+            results.classList.add('hidden');
+            batchActions.classList.add('hidden');
+            downloadAllBtn.classList.remove('hidden');
+            fileInput.value = '';
+        }
+    </script>
+</body>
+</html>
