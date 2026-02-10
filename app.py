@@ -38,7 +38,8 @@ pdfmetrics.registerFontFamily(
     italic='DejaVuSans-Oblique',
     boldItalic='DejaVuSans-BoldOblique'
 )
-
+os.makedirs('uploads', exist_ok=True)
+os.makedirs('outputs', exist_ok=True)
 def parse_rfms_excel(filepath):
     """Parse RFMS Excel file and extract header info + transactions."""
     df_raw = pd.read_excel(filepath, header=None)
