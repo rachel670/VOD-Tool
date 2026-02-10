@@ -38,8 +38,7 @@ pdfmetrics.registerFontFamily(
     italic='DejaVuSans-Oblique',
     boldItalic='DejaVuSans-BoldOblique'
 )
-os.makedirs('uploads', exist_ok=True)
-os.makedirs('outputs', exist_ok=True)
+
 def parse_rfms_excel(filepath):
     """Parse RFMS Excel file and extract header info + transactions."""
     df_raw = pd.read_excel(filepath, header=None)
@@ -130,11 +129,47 @@ def parse_rfms_excel(filepath):
                 
                 transactions.append({
                     'Date': date_str,
+                    'date_obj': date_val if isinstance(date_val, datetime) else None,
                     'Description': desc_str,
                     'Credits': credits_formatted
                 })
     
+    # Label catch-up transactions (multiple debits on same day)
+    transactions = label_catchup_transactions(transactions)
+    
     return header_info, transactions
+
+
+def label_catchup_transactions(transactions):
+    """When multiple transactions share the same date, label earlier ones
+    with the month they cover. E.g., two debits on Feb 10 means the first
+    is 'for' January, the second is for February (no label)."""
+    from collections import defaultdict
+    from dateutil.relativedelta import relativedelta
+    
+    # Group transactions by date string
+    date_groups = defaultdict(list)
+    for i, t in enumerate(transactions):
+        date_groups[t['Date']].append(i)
+    
+    for date_str, indices in date_groups.items():
+        if len(indices) <= 1:
+            continue  # Only one transaction on this date, skip
+        
+        # Multiple transactions on same date — label catch-ups
+        # Last one is current month (no label), earlier ones go back in time
+        num = len(indices)
+        # Get the date object from the first transaction in this group
+        date_obj = transactions[indices[0]].get('date_obj')
+        
+        for pos, idx in enumerate(indices):
+            months_back = num - 1 - pos  # first = furthest back, last = 0
+            if months_back > 0 and date_obj:
+                for_date = date_obj - relativedelta(months=months_back)
+                for_label = for_date.strftime('%B %Y')  # e.g., "January 2026"
+                transactions[idx]['Date'] = f"{date_str}\n(For: {for_label})"
+    
+    return transactions
 
 
 def generate_vod_pdf(header_info, transactions, output_path):
@@ -244,7 +279,7 @@ def generate_vod_pdf(header_info, transactions, output_path):
         for t in transactions:
             trans_data.append([t['Date'], t['Description'], t['Credits']])
         
-        trans_table = Table(trans_data, colWidths=[1.5*inch, 3.5*inch, 1.5*inch])
+        trans_table = Table(trans_data, colWidths=[1.8*inch, 3.2*inch, 1.5*inch])
         trans_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a6741')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
@@ -260,6 +295,7 @@ def generate_vod_pdf(header_info, transactions, output_path):
             ('TOPPADDING', (0, 1), (-1, -1), 6),
             ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cccccc')),
             ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f5f5f5')]),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
         ]))
         story.append(trans_table)
     else:
