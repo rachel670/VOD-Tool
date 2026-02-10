@@ -11,6 +11,8 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from reportlab.lib.units import inch
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, Image
 from reportlab.lib.enums import TA_CENTER, TA_LEFT
+from reportlab.pdfbase import pdfmetrics
+from reportlab.pdfbase.ttfonts import TTFont
 import zipfile
 import io
 import uuid
@@ -21,6 +23,20 @@ app.config['OUTPUT_FOLDER'] = 'outputs'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max
 
 LOGO_PATH = 'static/logo-1.png'
+
+# Register embedded TTF fonts for Adobe compatibility
+# Using DejaVuSans which is visually similar to Helvetica
+pdfmetrics.registerFont(TTFont('DejaVuSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
+pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
+pdfmetrics.registerFont(TTFont('DejaVuSans-Oblique', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf'))
+pdfmetrics.registerFont(TTFont('DejaVuSans-BoldOblique', '/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf'))
+pdfmetrics.registerFontFamily(
+    'DejaVuSans',
+    normal='DejaVuSans',
+    bold='DejaVuSans-Bold',
+    italic='DejaVuSans-Oblique',
+    boldItalic='DejaVuSans-BoldOblique'
+)
 
 def parse_rfms_excel(filepath):
     """Parse RFMS Excel file and extract header info + transactions."""
@@ -94,7 +110,7 @@ def parse_rfms_excel(filepath):
         # Filter: has Credits value AND Description contains AUTO PMT-CHASE or SURPLUS
         if pd.notna(credits_val) and credits_val != '':
             desc_str = str(desc_val) if pd.notna(desc_val) else ''
-            if 'AUTO PMT' in desc_str.upper() or 'SURPLUS' in desc_str.upper():
+            if 'AUTO PMT-CHASE' in desc_str.upper() or 'SURPLUS' in desc_str.upper():
                 # Format date
                 if pd.notna(date_val):
                     if isinstance(date_val, datetime):
@@ -132,24 +148,26 @@ def generate_vod_pdf(header_info, transactions, output_path):
     
     styles = getSampleStyleSheet()
     title_style = ParagraphStyle(
-        'Title',
+        'CustomTitle',
         parent=styles['Heading1'],
         fontSize=18,
         alignment=TA_CENTER,
         spaceAfter=20,
-        textColor=colors.HexColor('#4a6741')
+        textColor=colors.HexColor('#4a6741'),
+        fontName='DejaVuSans-Bold'
     )
     label_style = ParagraphStyle(
         'Label',
         parent=styles['Normal'],
         fontSize=10,
-        textColor=colors.HexColor('#666666')
+        textColor=colors.HexColor('#666666'),
+        fontName='DejaVuSans'
     )
     value_style = ParagraphStyle(
         'Value',
         parent=styles['Normal'],
         fontSize=10,
-        fontName='Helvetica-Bold'
+        fontName='DejaVuSans-Bold'
     )
     
     story = []
@@ -204,8 +222,10 @@ def generate_vod_pdf(header_info, transactions, output_path):
     
     header_table = Table(header_data, colWidths=[1.3*inch, 2*inch, 1.5*inch, 2*inch])
     header_table.setStyle(TableStyle([
-        ('FONTNAME', (0, 0), (0, -1), 'Helvetica-Bold'),
-        ('FONTNAME', (2, 0), (2, -1), 'Helvetica-Bold'),
+        ('FONTNAME', (0, 0), (0, -1), 'DejaVuSans-Bold'),
+        ('FONTNAME', (2, 0), (2, -1), 'DejaVuSans-Bold'),
+        ('FONTNAME', (1, 0), (1, -1), 'DejaVuSans'),
+        ('FONTNAME', (3, 0), (3, -1), 'DejaVuSans'),
         ('FONTSIZE', (0, 0), (-1, -1), 9),
         ('TEXTCOLOR', (0, 0), (0, -1), colors.HexColor('#555555')),
         ('TEXTCOLOR', (2, 0), (2, -1), colors.HexColor('#555555')),
@@ -226,7 +246,8 @@ def generate_vod_pdf(header_info, transactions, output_path):
         trans_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#4a6741')),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
-            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTNAME', (0, 0), (-1, 0), 'DejaVuSans-Bold'),
+            ('FONTNAME', (0, 1), (-1, -1), 'DejaVuSans'),
             ('FONTSIZE', (0, 0), (-1, 0), 10),
             ('FONTSIZE', (0, 1), (-1, -1), 9),
             ('ALIGN', (0, 0), (-1, 0), 'CENTER'),
@@ -240,14 +261,15 @@ def generate_vod_pdf(header_info, transactions, output_path):
         ]))
         story.append(trans_table)
     else:
-        story.append(Paragraph("<i>No qualifying transactions found.</i>", styles['Normal']))
+        no_trans_style = ParagraphStyle('NoTrans', fontName='DejaVuSans-Oblique', fontSize=10)
+        story.append(Paragraph("No qualifying transactions found.", no_trans_style))
     
     # Footer with generation date
     story.append(Spacer(1, 0.5*inch))
     eastern = ZoneInfo('America/New_York')
     gen_date = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p')
-    story.append(Paragraph(f"<i>Generated: {gen_date}</i>", 
-                          ParagraphStyle('Footer', fontSize=8, textColor=colors.gray)))
+    footer_style = ParagraphStyle('Footer', fontSize=8, textColor=colors.gray, fontName='DejaVuSans-Oblique')
+    story.append(Paragraph(f"Generated: {gen_date}", footer_style))
     
     doc.build(story)
     return output_path
@@ -357,8 +379,7 @@ def download_all():
     )
 
 
-os.makedirs('uploads', exist_ok=True)
-os.makedirs('outputs', exist_ok=True)
-
 if __name__ == '__main__':
+    os.makedirs('uploads', exist_ok=True)
+    os.makedirs('outputs', exist_ok=True)
     app.run(debug=True, host='0.0.0.0', port=5000)
