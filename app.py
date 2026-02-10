@@ -26,10 +26,11 @@ LOGO_PATH = 'static/logo-1.png'
 
 # Register embedded TTF fonts for Adobe compatibility
 # Using DejaVuSans which is visually similar to Helvetica
-pdfmetrics.registerFont(TTFont('DejaVuSans', '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf'))
-pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf'))
-pdfmetrics.registerFont(TTFont('DejaVuSans-Oblique', '/usr/share/fonts/truetype/dejavu/DejaVuSans-Oblique.ttf'))
-pdfmetrics.registerFont(TTFont('DejaVuSans-BoldOblique', '/usr/share/fonts/truetype/dejavu/DejaVuSans-BoldOblique.ttf'))
+FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
+pdfmetrics.registerFont(TTFont('DejaVuSans', os.path.join(FONT_DIR, 'DejaVuSans.ttf')))
+pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', os.path.join(FONT_DIR, 'DejaVuSans-Bold.ttf')))
+pdfmetrics.registerFont(TTFont('DejaVuSans-Oblique', os.path.join(FONT_DIR, 'DejaVuSans-Oblique.ttf')))
+pdfmetrics.registerFont(TTFont('DejaVuSans-BoldOblique', os.path.join(FONT_DIR, 'DejaVuSans-BoldOblique.ttf')))
 pdfmetrics.registerFontFamily(
     'DejaVuSans',
     normal='DejaVuSans',
