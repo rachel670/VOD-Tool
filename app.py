@@ -21,6 +21,8 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['OUTPUT_FOLDER'] = 'outputs'
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024  # 50MB max
+os.makedirs('uploads', exist_ok=True)
+os.makedirs('outputs', exist_ok=True)
 
 LOGO_PATH = 'static/logo-1.png'
 
