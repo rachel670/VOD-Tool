@@ -16,6 +16,8 @@ from reportlab.pdfbase.ttfonts import TTFont
 import zipfile
 import io
 import uuid
+from collections import defaultdict, Counter
+from dateutil.relativedelta import relativedelta
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -27,7 +29,6 @@ os.makedirs('outputs', exist_ok=True)
 LOGO_PATH = 'static/logo-1.png'
 
 # Register embedded TTF fonts for Adobe compatibility
-# Using DejaVuSans which is visually similar to Helvetica
 FONT_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fonts')
 pdfmetrics.registerFont(TTFont('DejaVuSans', os.path.join(FONT_DIR, 'DejaVuSans.ttf')))
 pdfmetrics.registerFont(TTFont('DejaVuSans-Bold', os.path.join(FONT_DIR, 'DejaVuSans-Bold.ttf')))
@@ -40,6 +41,7 @@ pdfmetrics.registerFontFamily(
     italic='DejaVuSans-Oblique',
     boldItalic='DejaVuSans-BoldOblique'
 )
+
 
 def parse_rfms_excel(filepath):
     """Parse RFMS Excel file and extract header info + transactions."""
@@ -102,7 +104,6 @@ def parse_rfms_excel(filepath):
             header_info['Interest'] = val.replace('Interest :', '').replace('Interest:', '').strip()
     
     # Transaction table starts at row 14 (index 14 is header)
-    # Columns based on analysis: 2=Date, 3=Description, 6=Debits, 7=Credits, 8=Rejects, 9=Balance
     transactions = []
     for idx in range(15, len(df_raw)):
         row = df_raw.iloc[idx]
@@ -110,7 +111,7 @@ def parse_rfms_excel(filepath):
         desc_val = row[3]
         credits_val = row[7]
         
-        # Filter: has Credits value AND Description contains AUTO PMT-CHASE or SURPLUS
+        # Filter: has Credits value AND Description contains AUTO PMT or SURPLUS
         if pd.notna(credits_val) and credits_val != '':
             desc_str = str(desc_val) if pd.notna(desc_val) else ''
             if 'AUTO PMT' in desc_str.upper() or 'SURPLUS' in desc_str.upper():
@@ -118,64 +119,147 @@ def parse_rfms_excel(filepath):
                 if pd.notna(date_val):
                     if isinstance(date_val, datetime):
                         date_str = date_val.strftime('%m/%d/%Y')
+                        date_obj = date_val
                     else:
                         date_str = str(date_val)
+                        date_obj = None
                 else:
                     date_str = ''
+                    date_obj = None
                 
-                # Format credits
+                # Parse credits as float
                 try:
-                    credits_formatted = f"${float(credits_val):,.2f}"
+                    credits_float = float(credits_val)
                 except:
-                    credits_formatted = str(credits_val)
+                    credits_float = 0.0
+                
+                credits_formatted = f"${credits_float:,.2f}"
                 
                 transactions.append({
                     'Date': date_str,
-                    'date_obj': date_val if isinstance(date_val, datetime) else None,
+                    'date_obj': date_obj,
                     'Description': desc_str,
-                    'Credits': credits_formatted
+                    'Credits': credits_formatted,
+                    'credits_float': credits_float
                 })
-    
-    # Label catch-up transactions (multiple debits on same day)
-    transactions = label_catchup_transactions(transactions)
     
     return header_info, transactions
 
 
-def label_catchup_transactions(transactions):
-    """When multiple transactions share the same date, label earlier ones
-    with the month they cover. E.g., two debits on Feb 10 means the first
-    is 'for' January, the second is for February (no label)."""
-    from collections import defaultdict
-    from dateutil.relativedelta import relativedelta
+def analyze_transactions(transactions):
+    """Analyze transactions and determine which need review.
     
-    # Group transactions by date string
-    date_groups = defaultdict(list)
+    Logic:
+    - 1 deposit per calendar month matching usual surplus -> auto_ok (no label)
+    - Multiple identical deposits in same month matching usual surplus -> auto_labeled (backwards)
+    - Any deposit not matching usual surplus in a multi-deposit month -> needs_input
+    
+    Returns:
+        needs_review: bool
+        analyzed: list of transaction dicts with 'status', 'label', 'show_enrollment_option'
+    """
+    if not transactions:
+        return False, []
+    
+    # Step 1: Find the usual surplus (most common credit amount)
+    amounts = [t['credits_float'] for t in transactions]
+    amount_counts = Counter(amounts)
+    usual_surplus = amount_counts.most_common(1)[0][0] if amount_counts else 0
+    
+    # Step 2: Group transactions by calendar month (YYYY-MM)
+    month_groups = defaultdict(list)
     for i, t in enumerate(transactions):
-        date_groups[t['Date']].append(i)
+        if t['date_obj']:
+            month_key = t['date_obj'].strftime('%Y-%m')
+            month_groups[month_key].append(i)
+        else:
+            month_groups['unknown'].append(i)
     
-    for date_str, indices in date_groups.items():
-        if len(indices) <= 1:
-            continue  # Only one transaction on this date, skip
-        
-        # Multiple transactions on same date — label catch-ups
-        # Last one is current month (no label), earlier ones go back in time
-        num = len(indices)
-        # Get the date object from the first transaction in this group
-        date_obj = transactions[indices[0]].get('date_obj')
-        
-        for pos, idx in enumerate(indices):
-            months_back = num - 1 - pos  # first = furthest back, last = 0
-            if months_back > 0 and date_obj:
-                for_date = date_obj - relativedelta(months=months_back)
-                for_label = for_date.strftime('%B %Y')  # e.g., "January 2026"
-                transactions[idx]['Date'] = f"{date_str}\n(For: {for_label})"
+    # Step 3: Initialize analyzed list
+    analyzed = []
+    needs_review = False
     
-    return transactions
+    for t in transactions:
+        entry = dict(t)
+        entry['status'] = 'auto_ok'
+        entry['label'] = None
+        entry['show_enrollment_option'] = False
+        analyzed.append(entry)
+    
+    # Step 4: Analyze each month group
+    for month_key, indices in month_groups.items():
+        if month_key == 'unknown':
+            for idx in indices:
+                analyzed[idx]['status'] = 'needs_input'
+                amt = analyzed[idx]['credits_float']
+                analyzed[idx]['show_enrollment_option'] = amt <= 300 and amt == int(amt)
+                needs_review = True
+            continue
+        
+        if len(indices) == 1:
+            # Single deposit in a month - no label needed
+            analyzed[indices[0]]['status'] = 'auto_ok'
+            continue
+        
+        # Multiple deposits in the same month
+        amounts_this_month = [transactions[i]['credits_float'] for i in indices]
+        all_same = len(set(amounts_this_month)) == 1
+        
+        # Sort indices by date within the month
+        sorted_indices = sorted(indices, key=lambda i: transactions[i]['date_obj'] or datetime.min)
+        
+        # Parse the month for label generation
+        year = int(month_key[:4])
+        month = int(month_key[5:])
+        current_month_date = datetime(year, month, 1)
+        
+        if all_same and amounts_this_month[0] == usual_surplus:
+            # All identical and match usual surplus -> auto-label backwards
+            num = len(sorted_indices)
+            for pos, idx in enumerate(sorted_indices):
+                months_back = num - 1 - pos
+                if months_back > 0:
+                    for_date = current_month_date - relativedelta(months=months_back)
+                    analyzed[idx]['label'] = f"For: {for_date.strftime('%B %Y')}"
+                    analyzed[idx]['status'] = 'auto_labeled'
+                    needs_review = True
+                else:
+                    # Last one = current month, no label needed
+                    analyzed[idx]['status'] = 'auto_ok'
+        else:
+            # Different amounts in same month
+            surplus_indices = [i for i in sorted_indices if transactions[i]['credits_float'] == usual_surplus]
+            non_surplus_indices = [i for i in sorted_indices if transactions[i]['credits_float'] != usual_surplus]
+            
+            # Handle surplus-matching deposits
+            if len(surplus_indices) == 1:
+                # Single surplus deposit this month - it's for this month
+                analyzed[surplus_indices[0]]['status'] = 'auto_ok'
+            elif len(surplus_indices) > 1:
+                # Multiple surplus deposits - backwards label
+                num_surplus = len(surplus_indices)
+                for pos, idx in enumerate(surplus_indices):
+                    months_back = num_surplus - 1 - pos
+                    if months_back > 0:
+                        for_date = current_month_date - relativedelta(months=months_back)
+                        analyzed[idx]['label'] = f"For: {for_date.strftime('%B %Y')}"
+                        analyzed[idx]['status'] = 'auto_labeled'
+                        needs_review = True
+                    else:
+                        analyzed[idx]['status'] = 'auto_ok'
+            
+            # Flag non-surplus amounts for review
+            for idx in non_surplus_indices:
+                analyzed[idx]['status'] = 'needs_input'
+                amt = analyzed[idx]['credits_float']
+                analyzed[idx]['show_enrollment_option'] = amt <= 300 and amt == int(amt)
+                needs_review = True
+    
+    return needs_review, analyzed
 
 
 def generate_vod_pdf(header_info, transactions, output_path):
-    """Generate VOD PDF with header info and filtered transactions."""
+    """Generate VOD PDF with header info and labeled transactions."""
     doc = SimpleDocTemplate(
         output_path,
         pagesize=letter,
@@ -195,19 +279,6 @@ def generate_vod_pdf(header_info, transactions, output_path):
         textColor=colors.HexColor('#4a6741'),
         fontName='DejaVuSans-Bold'
     )
-    label_style = ParagraphStyle(
-        'Label',
-        parent=styles['Normal'],
-        fontSize=10,
-        textColor=colors.HexColor('#666666'),
-        fontName='DejaVuSans'
-    )
-    value_style = ParagraphStyle(
-        'Value',
-        parent=styles['Normal'],
-        fontSize=10,
-        fontName='DejaVuSans-Bold'
-    )
     
     story = []
     
@@ -222,14 +293,13 @@ def generate_vod_pdf(header_info, transactions, output_path):
     story.append(Paragraph("Verification of Deposit", title_style))
     story.append(Spacer(1, 0.3*inch))
     
-    # Header info table (2 columns) - only show 5 fields
+    # Header info table
     header_fields = [
         ('Name', 'Account #'),
         ('Client ID', 'Status'),
         ('Date Opened', None)
     ]
     
-    # Map display names to actual data keys
     field_mapping = {
         'Name': 'Name',
         'Client ID': 'Res ID',
@@ -245,19 +315,9 @@ def generate_vod_pdf(header_info, transactions, output_path):
         if right_field:
             right_key = field_mapping.get(right_field, right_field)
             right_val = header_info.get(right_key, 'N/A')
-            header_data.append([
-                f"{left_field}:",
-                left_val,
-                f"{right_field}:",
-                right_val
-            ])
+            header_data.append([f"{left_field}:", left_val, f"{right_field}:", right_val])
         else:
-            header_data.append([
-                f"{left_field}:",
-                left_val,
-                '',
-                ''
-            ])
+            header_data.append([f"{left_field}:", left_val, '', ''])
     
     header_table = Table(header_data, colWidths=[1.3*inch, 2*inch, 1.5*inch, 2*inch])
     header_table.setStyle(TableStyle([
@@ -276,10 +336,17 @@ def generate_vod_pdf(header_info, transactions, output_path):
     story.append(Spacer(1, 0.4*inch))
     
     # Transactions table
-    if transactions:
+    visible_transactions = [t for t in transactions if t.get('label') != 'ENROLLMENT_FEE']
+    
+    if visible_transactions:
         trans_data = [['Date', 'Description', 'Credits']]
-        for t in transactions:
-            trans_data.append([t['Date'], t['Description'], t['Credits']])
+        for t in visible_transactions:
+            date_display = t['Date']
+            label = t.get('label', '')
+            if label and label != 'ENROLLMENT_FEE':
+                date_display = f"{t['Date']}\n({label})"
+            
+            trans_data.append([date_display, t['Description'], t['Credits']])
         
         trans_table = Table(trans_data, colWidths=[1.8*inch, 3.2*inch, 1.5*inch])
         trans_table.setStyle(TableStyle([
@@ -304,7 +371,7 @@ def generate_vod_pdf(header_info, transactions, output_path):
         no_trans_style = ParagraphStyle('NoTrans', fontName='DejaVuSans-Oblique', fontSize=10)
         story.append(Paragraph("No qualifying transactions found.", no_trans_style))
     
-    # Footer with generation date
+    # Footer
     story.append(Spacer(1, 0.5*inch))
     eastern = ZoneInfo('America/New_York')
     gen_date = datetime.now(eastern).strftime('%m/%d/%Y %I:%M %p')
@@ -318,7 +385,6 @@ def generate_vod_pdf(header_info, transactions, output_path):
 def generate_filename(header_info):
     """Generate filename: LastName, FirstName - VOD MM-DD-YYYY.pdf"""
     name = header_info.get('Name', 'Unknown')
-    # Name is typically "LASTNAME,FIRSTNAME" format
     parts = name.split(',')
     if len(parts) >= 2:
         last_name = parts[0].strip().title()
@@ -338,6 +404,7 @@ def index():
 
 @app.route('/upload', methods=['POST'])
 def upload_files():
+    """Upload and analyze files. Returns analysis for review if needed."""
     if 'files' not in request.files:
         return jsonify({'error': 'No files provided'}), 400
     
@@ -356,26 +423,55 @@ def upload_files():
             
             try:
                 header_info, transactions = parse_rfms_excel(upload_path)
-                output_filename = generate_filename(header_info)
-                output_path = os.path.join(app.config['OUTPUT_FOLDER'], f"{session_id}_{output_filename}")
+                needs_review, analyzed = analyze_transactions(transactions)
                 
-                generate_vod_pdf(header_info, transactions, output_path)
-                
-                results.append({
-                    'original': filename,
-                    'output': output_filename,
-                    'path': f"{session_id}_{output_filename}",
-                    'name': header_info.get('Name', 'Unknown'),
-                    'transaction_count': len(transactions),
-                    'success': True
-                })
+                if needs_review:
+                    # Keep file saved, return analysis for review screen
+                    results.append({
+                        'original': filename,
+                        'name': header_info.get('Name', 'Unknown'),
+                        'needs_review': True,
+                        'saved_file': f"{session_id}_{filename}",
+                        'transactions': [
+                            {
+                                'index': i,
+                                'date': t['Date'],
+                                'description': t['Description'],
+                                'credits': t['Credits'],
+                                'credits_float': t['credits_float'],
+                                'status': t['status'],
+                                'label': t.get('label'),
+                                'show_enrollment_option': t.get('show_enrollment_option', False)
+                            }
+                            for i, t in enumerate(analyzed)
+                        ],
+                        'success': True
+                    })
+                else:
+                    # No review needed - generate PDF immediately
+                    output_filename = generate_filename(header_info)
+                    output_path = os.path.join(app.config['OUTPUT_FOLDER'], f"{session_id}_{output_filename}")
+                    generate_vod_pdf(header_info, analyzed, output_path)
+                    
+                    if os.path.exists(upload_path):
+                        os.remove(upload_path)
+                    
+                    results.append({
+                        'original': filename,
+                        'output': output_filename,
+                        'path': f"{session_id}_{output_filename}",
+                        'name': header_info.get('Name', 'Unknown'),
+                        'transaction_count': len(transactions),
+                        'needs_review': False,
+                        'success': True
+                    })
             except Exception as e:
                 results.append({
                     'original': filename,
                     'error': str(e),
-                    'success': False
+                    'success': False,
+                    'needs_review': False
                 })
-            finally:
                 if os.path.exists(upload_path):
                     os.remove(upload_path)
     
@@ -385,6 +481,50 @@ def upload_files():
         'total': len(results),
         'successful': sum(1 for r in results if r['success'])
     })
+
+
+@app.route('/generate', methods=['POST'])
+def generate_with_labels():
+    """Generate PDF after user provides labels for flagged transactions."""
+    data = request.json
+    saved_file = data.get('saved_file')
+    labels = data.get('labels', {})  # {index_str: label_string or 'ENROLLMENT_FEE'}
+    
+    if not saved_file:
+        return jsonify({'error': 'No file specified'}), 400
+    
+    filepath = os.path.join(app.config['UPLOAD_FOLDER'], saved_file)
+    if not os.path.exists(filepath):
+        return jsonify({'error': 'File not found. Please re-upload.'}), 404
+    
+    try:
+        header_info, transactions = parse_rfms_excel(filepath)
+        _, analyzed = analyze_transactions(transactions)
+        
+        # Apply user-provided labels
+        for idx_str, label in labels.items():
+            idx = int(idx_str)
+            if 0 <= idx < len(analyzed):
+                analyzed[idx]['label'] = label
+        
+        output_filename = generate_filename(header_info)
+        session_id = saved_file.split('_')[0]
+        output_path = os.path.join(app.config['OUTPUT_FOLDER'], f"{session_id}_{output_filename}")
+        
+        generate_vod_pdf(header_info, analyzed, output_path)
+        
+        if os.path.exists(filepath):
+            os.remove(filepath)
+        
+        return jsonify({
+            'success': True,
+            'output': output_filename,
+            'path': f"{session_id}_{output_filename}",
+            'name': header_info.get('Name', 'Unknown'),
+            'transaction_count': len([t for t in analyzed if t.get('label') != 'ENROLLMENT_FEE'])
+        })
+    except Exception as e:
+        return jsonify({'error': str(e), 'success': False}), 500
 
 
 @app.route('/download/<filename>')
@@ -405,7 +545,6 @@ def download_all():
         for filename in filenames:
             filepath = os.path.join(app.config['OUTPUT_FOLDER'], filename)
             if os.path.exists(filepath):
-                # Use the clean filename (without session prefix) in the zip
                 clean_name = '_'.join(filename.split('_')[1:]) if '_' in filename else filename
                 zf.write(filepath, clean_name)
     
