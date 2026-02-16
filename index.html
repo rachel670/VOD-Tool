@@ -446,22 +446,46 @@
         
         let selectedFiles = [];
         let processedFiles = [];
-        let pendingReviews = []; // Files needing review
-        let completedResults = []; // Files already generated
+        let pendingReviews = [];
+        let completedResults = [];
 
-        // Generate month options for dropdowns (24 months back from now)
-        function generateMonthOptions() {
+        // Generate month options from Date Opened to now + 2 months
+        function generateMonthsFrom(dateOpenedStr) {
             const months = [];
             const now = new Date();
-            for (let i = 12; i >= -2; i--) {
-                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-                const value = d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
-                months.push(value);
+            const endDate = new Date(now.getFullYear(), now.getMonth() + 2, 1);
+            
+            let startDate;
+            if (dateOpenedStr) {
+                const parts = dateOpenedStr.split('/');
+                if (parts.length === 3) {
+                    let year = parseInt(parts[2]);
+                    if (year < 100) year += 2000;
+                    startDate = new Date(year, parseInt(parts[0]) - 1, 1);
+                } else {
+                    startDate = new Date(now.getFullYear(), now.getMonth() - 24, 1);
+                }
+            } else {
+                startDate = new Date(now.getFullYear(), now.getMonth() - 24, 1);
+            }
+            
+            let d = new Date(startDate);
+            while (d <= endDate) {
+                months.push(d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
+                d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
             }
             return months;
         }
 
-        const monthOptions = generateMonthOptions();
+        // Build <option> tags from a month list
+        function monthOptionsHTML(months, selectedValue) {
+            let html = '<option value="">Select month...</option>';
+            for (const m of months) {
+                const sel = (m === selectedValue) ? 'selected' : '';
+                html += `<option value="${m}" ${sel}>${m}</option>`;
+            }
+            return html;
+        }
 
         // Drag and drop
         dropZone.addEventListener('dragover', (e) => {
@@ -554,11 +578,9 @@
             }
             
             if (pendingReviews.length > 0) {
-                // Show review screen
                 uploadCard.classList.add('hidden');
                 showReviewScreen();
             } else {
-                // No review needed - show results directly
                 showFinalResults();
             }
         }
@@ -571,9 +593,10 @@
             for (let ri = 0; ri < pendingReviews.length; ri++) {
                 const review = pendingReviews[ri];
                 const transactions = review.transactions;
+                const months = generateMonthsFrom(review.date_opened);
                 
-                // Only show rows that need attention (auto_labeled or needs_input)
-                const reviewableRows = transactions.filter(t => t.status === 'auto_labeled' || t.status === 'needs_input');
+                // Store for use in addMonth
+                review._months = months;
                 
                 html += `
                 <div class="review-card" data-review-index="${ri}" data-saved-file="${review.saved_file}">
@@ -598,7 +621,6 @@
                 
                 for (const t of transactions) {
                     if (t.status === 'auto_ok') {
-                        // Show but no action needed
                         html += `
                             <tr class="row-auto-ok">
                                 <td>${t.date}</td>
@@ -607,7 +629,7 @@
                                 <td><span class="no-label-badge">—</span></td>
                             </tr>`;
                     } else if (t.status === 'auto_labeled') {
-                        // Pre-filled but editable
+                        const prefilledMonth = t.label ? t.label.replace('For: ', '') : '';
                         html += `
                             <tr class="row-auto-labeled">
                                 <td>${t.date}</td>
@@ -617,14 +639,13 @@
                                     <div class="label-input-group" data-ri="${ri}" data-ti="${t.index}">
                                         <div class="month-select-row">
                                             <select class="auto-label-select month-select" data-ri="${ri}" data-ti="${t.index}">
-                                                ${monthOptions.map(m => `<option value="${m}" ${t.label === 'For: ' + m ? 'selected' : ''}>${m}</option>`).join('')}
+                                                ${monthOptionsHTML(months, prefilledMonth)}
                                             </select>
                                         </div>
                                     </div>
                                 </td>
                             </tr>`;
                     } else if (t.status === 'needs_input') {
-                        // Needs user input
                         html += `
                             <tr class="row-needs-input">
                                 <td><strong>${t.date}</strong></td>
@@ -636,8 +657,7 @@
                                             <div class="month-select-row">
                                                 <span style="font-size:12px;color:#666;">For:</span>
                                                 <select class="month-select needs-input-select" data-ri="${ri}" data-ti="${t.index}">
-                                                    <option value="">Select month...</option>
-                                                    ${monthOptions.map(m => `<option value="${m}">${m}</option>`).join('')}
+                                                    ${monthOptionsHTML(months, '')}
                                                 </select>
                                                 <button class="add-month-btn" onclick="addMonth(${ri}, ${t.index})">+ Month</button>
                                             </div>
@@ -670,8 +690,8 @@
 
         function addMonth(ri, ti) {
             const container = document.getElementById(`months-container-${ri}-${ti}`);
-            const rows = container.querySelectorAll('.month-select-row');
-            const newIndex = rows.length;
+            const review = pendingReviews[ri];
+            const months = review._months;
             
             const newRow = document.createElement('div');
             newRow.className = 'month-select-row';
@@ -679,8 +699,7 @@
             newRow.innerHTML = `
                 <span style="font-size:12px;color:#666;visibility:hidden;">For:</span>
                 <select class="month-select needs-input-select" data-ri="${ri}" data-ti="${ti}">
-                    <option value="">Select month...</option>
-                    ${monthOptions.map(m => `<option value="${m}">${m}</option>`).join('')}
+                    ${monthOptionsHTML(months, '')}
                 </select>
                 <button class="remove-month-btn" onclick="this.parentElement.remove()">×</button>
             `;
@@ -702,24 +721,20 @@
             const review = pendingReviews[ri];
             const card = document.querySelector(`[data-review-index="${ri}"]`);
             
-            // Build labels object
             const labels = {};
             let hasError = false;
             
             for (const t of review.transactions) {
                 if (t.status === 'auto_labeled') {
-                    // Get the selected value from the auto-label dropdown
                     const select = card.querySelector(`.auto-label-select[data-ti="${t.index}"]`);
-                    if (select) {
+                    if (select && select.value) {
                         labels[t.index] = `For: ${select.value}`;
                     }
                 } else if (t.status === 'needs_input') {
-                    // Check if marked as enrollment fee
                     const checkbox = card.querySelector(`.enrollment-checkbox[data-ti="${t.index}"]`);
                     if (checkbox && checkbox.checked) {
                         labels[t.index] = 'ENROLLMENT_FEE';
                     } else {
-                        // Get selected months
                         const container = document.getElementById(`months-container-${ri}-${t.index}`);
                         const selects = container.querySelectorAll('.needs-input-select');
                         const selectedMonths = [];
@@ -728,7 +743,6 @@
                         });
                         
                         if (selectedMonths.length === 0) {
-                            // Show error
                             const errorEl = document.getElementById(`error-${ri}-${t.index}`);
                             if (errorEl) errorEl.classList.remove('hidden');
                             hasError = true;
@@ -743,8 +757,7 @@
             
             if (hasError) return;
             
-            // Submit to backend
-            const btn = card.querySelector('.btn');
+            const btn = card.querySelector('.review-actions .btn');
             btn.disabled = true;
             btn.textContent = 'Generating...';
             
@@ -770,11 +783,9 @@
                         needs_review: false
                     });
                     
-                    // Remove this review card
                     card.remove();
-                    pendingReviews[ri] = null; // Mark as done
+                    pendingReviews[ri] = null;
                     
-                    // Check if all reviews are done
                     const remaining = pendingReviews.filter(r => r !== null);
                     if (remaining.length === 0) {
                         reviewSection.classList.add('hidden');
