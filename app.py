@@ -220,7 +220,7 @@ def analyze_transactions(transactions):
                 months_back = num - 1 - pos
                 if months_back > 0:
                     for_date = current_month_date - relativedelta(months=months_back)
-                    analyzed[idx]['label'] = f"For: {for_date.strftime('%B %Y')}"
+                    analyzed[idx]['label'] = f"For: {for_date.strftime('%b %Y')}"
                     analyzed[idx]['status'] = 'auto_labeled'
                     needs_review = True
                 else:
@@ -242,7 +242,7 @@ def analyze_transactions(transactions):
                     months_back = num_surplus - 1 - pos
                     if months_back > 0:
                         for_date = current_month_date - relativedelta(months=months_back)
-                        analyzed[idx]['label'] = f"For: {for_date.strftime('%B %Y')}"
+                        analyzed[idx]['label'] = f"For: {for_date.strftime('%b %Y')}"
                         analyzed[idx]['status'] = 'auto_labeled'
                         needs_review = True
                     else:
@@ -338,15 +338,50 @@ def generate_vod_pdf(header_info, transactions, output_path):
     # Transactions table
     visible_transactions = [t for t in transactions if t.get('label') != 'ENROLLMENT_FEE']
     
+    # Style for date cells with labels
+    date_style = ParagraphStyle(
+        'DateCell',
+        fontName='DejaVuSans',
+        fontSize=9,
+        leading=11,
+    )
+    label_note_style = ParagraphStyle(
+        'LabelNote',
+        fontName='DejaVuSans-Oblique',
+        fontSize=8,
+        leading=10,
+        textColor=colors.HexColor('#555555'),
+    )
+    desc_style = ParagraphStyle(
+        'DescCell',
+        fontName='DejaVuSans',
+        fontSize=9,
+        leading=11,
+    )
+    credits_style = ParagraphStyle(
+        'CreditsCell',
+        fontName='DejaVuSans',
+        fontSize=9,
+        leading=11,
+        alignment=2,  # RIGHT
+    )
+    
     if visible_transactions:
         trans_data = [['Date', 'Description', 'Credits']]
         for t in visible_transactions:
-            date_display = t['Date']
             label = t.get('label', '')
             if label and label != 'ENROLLMENT_FEE':
-                date_display = f"{t['Date']}\n({label})"
+                date_cell = Paragraph(
+                    f"{t['Date']}<br/><i><font size='8' color='#555555'>({label})</font></i>",
+                    date_style
+                )
+            else:
+                date_cell = Paragraph(t['Date'], date_style)
             
-            trans_data.append([date_display, t['Description'], t['Credits']])
+            desc_cell = Paragraph(t['Description'], desc_style)
+            credits_cell = Paragraph(t['Credits'], credits_style)
+            
+            trans_data.append([date_cell, desc_cell, credits_cell])
         
         trans_table = Table(trans_data, colWidths=[1.8*inch, 3.2*inch, 1.5*inch])
         trans_table.setStyle(TableStyle([
