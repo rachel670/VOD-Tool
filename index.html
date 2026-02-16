@@ -17,7 +17,7 @@
             padding: 40px 20px;
         }
         .container {
-            max-width: 800px;
+            max-width: 900px;
             margin: 0 auto;
         }
         .header {
@@ -209,6 +209,172 @@
         .summary strong {
             color: #4a6741;
         }
+
+        /* Review screen styles */
+        .review-section {
+            margin-top: 30px;
+        }
+        .review-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.06);
+            border: 2px solid #f0ad4e;
+        }
+        .review-card h3 {
+            color: #333;
+            margin-bottom: 4px;
+            font-size: 18px;
+        }
+        .review-card .client-subtitle {
+            color: #888;
+            font-size: 13px;
+            margin-bottom: 20px;
+        }
+        .review-card .review-note {
+            background: #fff8e1;
+            border-radius: 8px;
+            padding: 12px 16px;
+            margin-bottom: 20px;
+            font-size: 13px;
+            color: #7a6200;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .review-card .review-note svg {
+            flex-shrink: 0;
+        }
+        .transaction-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        .transaction-table th {
+            background: #4a6741;
+            color: white;
+            padding: 10px 12px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        .transaction-table th:last-child {
+            text-align: right;
+        }
+        .transaction-table td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #eee;
+            vertical-align: middle;
+        }
+        .transaction-table tr:nth-child(even) {
+            background: #fafafa;
+        }
+        .transaction-table td:last-child {
+            text-align: right;
+            font-weight: 500;
+        }
+        .row-auto-ok td {
+            color: #555;
+        }
+        .row-auto-labeled td {
+            color: #333;
+        }
+        .row-needs-input td {
+            background: #fff8e1 !important;
+        }
+        .auto-label-badge {
+            display: inline-block;
+            background: #e8f5e9;
+            color: #2e7d32;
+            padding: 3px 10px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+        .no-label-badge {
+            display: inline-block;
+            color: #999;
+            font-size: 12px;
+            font-style: italic;
+        }
+        .label-input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+        .month-select-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-wrap: wrap;
+        }
+        .month-select-row select {
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+        }
+        .month-select-row .add-month-btn {
+            background: #e8f5e9;
+            color: #4a6741;
+            border: 1px solid #4a6741;
+            border-radius: 6px;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .month-select-row .add-month-btn:hover {
+            background: #c8e6c9;
+        }
+        .month-select-row .remove-month-btn {
+            background: none;
+            color: #dc3545;
+            border: none;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 0 4px;
+            font-weight: bold;
+        }
+        .enrollment-fee-option {
+            margin-top: 4px;
+        }
+        .enrollment-fee-option label {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 13px;
+            color: #666;
+            cursor: pointer;
+        }
+        .enrollment-fee-option input[type="checkbox"] {
+            accent-color: #4a6741;
+        }
+        .auto-label-select {
+            padding: 6px 10px;
+            border: 1px solid #c8e6c9;
+            border-radius: 6px;
+            font-size: 13px;
+            background: #f1f8e9;
+            color: #2e7d32;
+        }
+        .review-actions {
+            text-align: center;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid #eee;
+        }
+        .review-actions .btn {
+            padding: 14px 40px;
+            font-size: 16px;
+        }
+        .validation-error {
+            color: #dc3545;
+            font-size: 12px;
+            margin-top: 4px;
+        }
     </style>
 </head>
 <body>
@@ -219,7 +385,7 @@
             <p>Upload RFMS Excel files to generate Verification of Deposit PDFs</p>
         </div>
         
-        <div class="upload-card">
+        <div class="upload-card" id="uploadCard">
             <div class="drop-zone" id="dropZone">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
@@ -239,8 +405,14 @@
                 <div class="spinner"></div>
                 <p>Processing files...</p>
             </div>
-            
-            <div class="results hidden" id="results">
+        </div>
+
+        <!-- Review Section -->
+        <div class="review-section hidden" id="reviewSection"></div>
+        
+        <!-- Results Section -->
+        <div class="upload-card hidden" id="resultsCard">
+            <div class="results" id="results">
                 <div class="summary" id="summary"></div>
                 <h3>
                     <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -249,7 +421,7 @@
                     Generated Files
                 </h3>
                 <div id="resultsList"></div>
-                <div class="batch-actions hidden" id="batchActions">
+                <div class="batch-actions" id="batchActions">
                     <button class="btn" id="downloadAllBtn">Download All (ZIP)</button>
                     <button class="btn btn-secondary" id="resetBtn" style="margin-left: 10px;">Process More Files</button>
                 </div>
@@ -263,15 +435,33 @@
         const fileList = document.getElementById('fileList');
         const processBtn = document.getElementById('processBtn');
         const loading = document.getElementById('loading');
-        const results = document.getElementById('results');
+        const resultsCard = document.getElementById('resultsCard');
         const resultsList = document.getElementById('resultsList');
         const batchActions = document.getElementById('batchActions');
         const downloadAllBtn = document.getElementById('downloadAllBtn');
         const resetBtn = document.getElementById('resetBtn');
         const summary = document.getElementById('summary');
+        const reviewSection = document.getElementById('reviewSection');
+        const uploadCard = document.getElementById('uploadCard');
         
         let selectedFiles = [];
         let processedFiles = [];
+        let pendingReviews = []; // Files needing review
+        let completedResults = []; // Files already generated
+
+        // Generate month options for dropdowns (24 months back from now)
+        function generateMonthOptions() {
+            const months = [];
+            const now = new Date();
+            for (let i = 12; i >= -2; i--) {
+                const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+                const value = d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+                months.push(value);
+            }
+            return months;
+        }
+
+        const monthOptions = generateMonthOptions();
 
         // Drag and drop
         dropZone.addEventListener('dragover', (e) => {
@@ -342,28 +532,286 @@
                     body: formData
                 });
                 const data = await response.json();
-                showResults(data);
+                handleUploadResponse(data);
             } catch (error) {
                 alert('Error processing files: ' + error.message);
                 resetUI();
             }
         });
 
-        function showResults(data) {
+        function handleUploadResponse(data) {
             loading.classList.remove('active');
-            results.classList.remove('hidden');
             
-            summary.innerHTML = `<strong>${data.successful}</strong> of <strong>${data.total}</strong> files processed successfully`;
+            pendingReviews = [];
+            completedResults = [];
             
-            processedFiles = data.results.filter(r => r.success).map(r => r.path);
+            for (const r of data.results) {
+                if (r.success && r.needs_review) {
+                    pendingReviews.push(r);
+                } else {
+                    completedResults.push(r);
+                }
+            }
             
-            resultsList.innerHTML = data.results.map(r => {
+            if (pendingReviews.length > 0) {
+                // Show review screen
+                uploadCard.classList.add('hidden');
+                showReviewScreen();
+            } else {
+                // No review needed - show results directly
+                showFinalResults();
+            }
+        }
+
+        function showReviewScreen() {
+            reviewSection.classList.remove('hidden');
+            
+            let html = '';
+            
+            for (let ri = 0; ri < pendingReviews.length; ri++) {
+                const review = pendingReviews[ri];
+                const transactions = review.transactions;
+                
+                // Only show rows that need attention (auto_labeled or needs_input)
+                const reviewableRows = transactions.filter(t => t.status === 'auto_labeled' || t.status === 'needs_input');
+                
+                html += `
+                <div class="review-card" data-review-index="${ri}" data-saved-file="${review.saved_file}">
+                    <h3>${review.name}</h3>
+                    <div class="client-subtitle">Source: ${review.original}</div>
+                    <div class="review-note">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z" />
+                        </svg>
+                        Please review the highlighted deposits below. Auto-filled labels can be changed if needed.
+                    </div>
+                    <table class="transaction-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Credits</th>
+                                <th>Label</th>
+                            </tr>
+                        </thead>
+                        <tbody>`;
+                
+                for (const t of transactions) {
+                    if (t.status === 'auto_ok') {
+                        // Show but no action needed
+                        html += `
+                            <tr class="row-auto-ok">
+                                <td>${t.date}</td>
+                                <td>${t.description}</td>
+                                <td>${t.credits}</td>
+                                <td><span class="no-label-badge">—</span></td>
+                            </tr>`;
+                    } else if (t.status === 'auto_labeled') {
+                        // Pre-filled but editable
+                        html += `
+                            <tr class="row-auto-labeled">
+                                <td>${t.date}</td>
+                                <td>${t.description}</td>
+                                <td>${t.credits}</td>
+                                <td>
+                                    <div class="label-input-group" data-ri="${ri}" data-ti="${t.index}">
+                                        <div class="month-select-row">
+                                            <select class="auto-label-select month-select" data-ri="${ri}" data-ti="${t.index}">
+                                                ${monthOptions.map(m => `<option value="${m}" ${t.label === 'For: ' + m ? 'selected' : ''}>${m}</option>`).join('')}
+                                            </select>
+                                        </div>
+                                    </div>
+                                </td>
+                            </tr>`;
+                    } else if (t.status === 'needs_input') {
+                        // Needs user input
+                        html += `
+                            <tr class="row-needs-input">
+                                <td><strong>${t.date}</strong></td>
+                                <td><strong>${t.description}</strong></td>
+                                <td><strong>${t.credits}</strong></td>
+                                <td>
+                                    <div class="label-input-group" data-ri="${ri}" data-ti="${t.index}">
+                                        <div id="months-container-${ri}-${t.index}">
+                                            <div class="month-select-row">
+                                                <span style="font-size:12px;color:#666;">For:</span>
+                                                <select class="month-select needs-input-select" data-ri="${ri}" data-ti="${t.index}">
+                                                    <option value="">Select month...</option>
+                                                    ${monthOptions.map(m => `<option value="${m}">${m}</option>`).join('')}
+                                                </select>
+                                                <button class="add-month-btn" onclick="addMonth(${ri}, ${t.index})">+ Month</button>
+                                            </div>
+                                        </div>
+                                        ${t.show_enrollment_option ? `
+                                        <div class="enrollment-fee-option">
+                                            <label>
+                                                <input type="checkbox" class="enrollment-checkbox" data-ri="${ri}" data-ti="${t.index}" onchange="toggleEnrollmentFee(this, ${ri}, ${t.index})">
+                                                Enrollment Fee (exclude from VOD)
+                                            </label>
+                                        </div>` : ''}
+                                        <div class="validation-error hidden" id="error-${ri}-${t.index}">Please select a month or mark as enrollment fee</div>
+                                    </div>
+                                </td>
+                            </tr>`;
+                    }
+                }
+                
+                html += `
+                        </tbody>
+                    </table>
+                    <div class="review-actions">
+                        <button class="btn" onclick="submitReview(${ri})">Generate VOD PDF</button>
+                    </div>
+                </div>`;
+            }
+            
+            reviewSection.innerHTML = html;
+        }
+
+        function addMonth(ri, ti) {
+            const container = document.getElementById(`months-container-${ri}-${ti}`);
+            const rows = container.querySelectorAll('.month-select-row');
+            const newIndex = rows.length;
+            
+            const newRow = document.createElement('div');
+            newRow.className = 'month-select-row';
+            newRow.style.marginTop = '4px';
+            newRow.innerHTML = `
+                <span style="font-size:12px;color:#666;visibility:hidden;">For:</span>
+                <select class="month-select needs-input-select" data-ri="${ri}" data-ti="${ti}">
+                    <option value="">Select month...</option>
+                    ${monthOptions.map(m => `<option value="${m}">${m}</option>`).join('')}
+                </select>
+                <button class="remove-month-btn" onclick="this.parentElement.remove()">×</button>
+            `;
+            container.appendChild(newRow);
+        }
+
+        function toggleEnrollmentFee(checkbox, ri, ti) {
+            const container = document.getElementById(`months-container-${ri}-${ti}`);
+            if (checkbox.checked) {
+                container.style.opacity = '0.4';
+                container.style.pointerEvents = 'none';
+            } else {
+                container.style.opacity = '1';
+                container.style.pointerEvents = 'auto';
+            }
+        }
+
+        async function submitReview(ri) {
+            const review = pendingReviews[ri];
+            const card = document.querySelector(`[data-review-index="${ri}"]`);
+            
+            // Build labels object
+            const labels = {};
+            let hasError = false;
+            
+            for (const t of review.transactions) {
+                if (t.status === 'auto_labeled') {
+                    // Get the selected value from the auto-label dropdown
+                    const select = card.querySelector(`.auto-label-select[data-ti="${t.index}"]`);
+                    if (select) {
+                        labels[t.index] = `For: ${select.value}`;
+                    }
+                } else if (t.status === 'needs_input') {
+                    // Check if marked as enrollment fee
+                    const checkbox = card.querySelector(`.enrollment-checkbox[data-ti="${t.index}"]`);
+                    if (checkbox && checkbox.checked) {
+                        labels[t.index] = 'ENROLLMENT_FEE';
+                    } else {
+                        // Get selected months
+                        const container = document.getElementById(`months-container-${ri}-${t.index}`);
+                        const selects = container.querySelectorAll('.needs-input-select');
+                        const selectedMonths = [];
+                        selects.forEach(s => {
+                            if (s.value) selectedMonths.push(s.value);
+                        });
+                        
+                        if (selectedMonths.length === 0) {
+                            // Show error
+                            const errorEl = document.getElementById(`error-${ri}-${t.index}`);
+                            if (errorEl) errorEl.classList.remove('hidden');
+                            hasError = true;
+                        } else {
+                            const errorEl = document.getElementById(`error-${ri}-${t.index}`);
+                            if (errorEl) errorEl.classList.add('hidden');
+                            labels[t.index] = `For: ${selectedMonths.join(', ')}`;
+                        }
+                    }
+                }
+            }
+            
+            if (hasError) return;
+            
+            // Submit to backend
+            const btn = card.querySelector('.btn');
+            btn.disabled = true;
+            btn.textContent = 'Generating...';
+            
+            try {
+                const response = await fetch('/generate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        saved_file: review.saved_file,
+                        labels: labels
+                    })
+                });
+                const result = await response.json();
+                
+                if (result.success) {
+                    completedResults.push({
+                        original: review.original,
+                        output: result.output,
+                        path: result.path,
+                        name: result.name,
+                        transaction_count: result.transaction_count,
+                        success: true,
+                        needs_review: false
+                    });
+                    
+                    // Remove this review card
+                    card.remove();
+                    pendingReviews[ri] = null; // Mark as done
+                    
+                    // Check if all reviews are done
+                    const remaining = pendingReviews.filter(r => r !== null);
+                    if (remaining.length === 0) {
+                        reviewSection.classList.add('hidden');
+                        showFinalResults();
+                    }
+                } else {
+                    alert('Error generating PDF: ' + (result.error || 'Unknown error'));
+                    btn.disabled = false;
+                    btn.textContent = 'Generate VOD PDF';
+                }
+            } catch (error) {
+                alert('Error: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = 'Generate VOD PDF';
+            }
+        }
+
+        function showFinalResults() {
+            uploadCard.classList.add('hidden');
+            reviewSection.classList.add('hidden');
+            resultsCard.classList.remove('hidden');
+            
+            const allResults = completedResults;
+            const successful = allResults.filter(r => r.success);
+            const failed = allResults.filter(r => !r.success);
+            
+            summary.innerHTML = `<strong>${successful.length}</strong> of <strong>${allResults.length}</strong> files processed successfully`;
+            
+            processedFiles = successful.map(r => r.path);
+            
+            resultsList.innerHTML = allResults.map(r => {
                 if (r.success) {
                     return `
                         <div class="result-item">
                             <div class="result-info">
                                 <div class="filename">${r.output}</div>
-                                <div class="details">Source: ${r.original} • ${r.transaction_count} qualifying transaction(s)</div>
+                                <div class="details">Source: ${r.original} • ${r.transaction_count} transaction(s)</div>
                             </div>
                             <a href="/download/${r.path}" class="download-btn" download>Download</a>
                         </div>
@@ -381,9 +829,8 @@
             }).join('');
             
             if (processedFiles.length > 1) {
-                batchActions.classList.remove('hidden');
+                downloadAllBtn.classList.remove('hidden');
             } else {
-                batchActions.classList.remove('hidden');
                 downloadAllBtn.classList.add('hidden');
             }
         }
@@ -407,12 +854,16 @@
         function resetUI() {
             selectedFiles = [];
             processedFiles = [];
+            pendingReviews = [];
+            completedResults = [];
+            uploadCard.classList.remove('hidden');
             dropZone.classList.remove('hidden');
             fileList.classList.add('hidden');
             processBtn.classList.add('hidden');
             loading.classList.remove('active');
-            results.classList.add('hidden');
-            batchActions.classList.add('hidden');
+            resultsCard.classList.add('hidden');
+            reviewSection.classList.add('hidden');
+            reviewSection.innerHTML = '';
             downloadAllBtn.classList.remove('hidden');
             fileInput.value = '';
         }
