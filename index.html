@@ -551,27 +551,14 @@
         // Year-Month Picker constants
         const YM_MIN_YEAR = 2023;
         const YM_MIN_MONTH = 0; // January
+        const YM_MAX_YEAR = 2029;
+        const YM_MAX_MONTH = 11; // December
         const YM_MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-        function getYMMaxDate() {
-            const now = new Date();
-            return { year: now.getFullYear(), month: now.getMonth() + 2 };
-            // +2 months from now
-        }
-
-        function getYMMaxYear() {
-            const max = getYMMaxDate();
-            return max.month > 11 ? max.year + 1 : max.year;
-        }
-
         function isMonthInRange(year, monthIdx) {
-            const max = getYMMaxDate();
-            const maxYear = max.month > 11 ? max.year + 1 : max.year;
-            const maxMonth = max.month > 11 ? max.month - 12 : max.month;
-            if (year < YM_MIN_YEAR) return false;
+            if (year < YM_MIN_YEAR || year > YM_MAX_YEAR) return false;
             if (year === YM_MIN_YEAR && monthIdx < YM_MIN_MONTH) return false;
-            if (year > maxYear) return false;
-            if (year === maxYear && monthIdx > maxMonth) return false;
+            if (year === YM_MAX_YEAR && monthIdx > YM_MAX_MONTH) return false;
             return true;
         }
 
@@ -624,13 +611,11 @@
             const dropdown = document.getElementById(wrapperId + '-dropdown');
             const hiddenInput = wrapper.querySelector('input[type="hidden"]');
             const currentVal = hiddenInput.value;
-            const maxYear = getYMMaxYear();
-
             let html = `
                 <div class="ym-picker-header">
                     <button type="button" onclick="ymChangeYear('${wrapperId}', ${year - 1})" ${year <= YM_MIN_YEAR ? 'disabled' : ''}>&lsaquo;</button>
                     <span class="ym-year-label">${year}</span>
-                    <button type="button" onclick="ymChangeYear('${wrapperId}', ${year + 1})" ${year >= maxYear ? 'disabled' : ''}>&rsaquo;</button>
+                    <button type="button" onclick="ymChangeYear('${wrapperId}', ${year + 1})" ${year >= YM_MAX_YEAR ? 'disabled' : ''}>&rsaquo;</button>
                 </div>
                 <div class="ym-month-grid">`;
 
