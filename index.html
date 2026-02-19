@@ -309,13 +309,6 @@
             gap: 6px;
             flex-wrap: wrap;
         }
-        .month-select-row select {
-            padding: 6px 10px;
-            border: 1px solid #ddd;
-            border-radius: 6px;
-            font-size: 13px;
-            background: white;
-        }
         .month-select-row .add-month-btn {
             background: #e8f5e9;
             color: #4a6741;
@@ -338,6 +331,117 @@
             padding: 0 4px;
             font-weight: bold;
         }
+        /* Year-Month Picker */
+        .ym-picker-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+        .ym-picker-trigger {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 13px;
+            background: white;
+            cursor: pointer;
+            min-width: 120px;
+            text-align: left;
+            color: #333;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 6px;
+        }
+        .ym-picker-trigger.placeholder {
+            color: #999;
+        }
+        .ym-picker-trigger:hover {
+            border-color: #4a6741;
+        }
+        .ym-picker-trigger .arrow-icon {
+            font-size: 10px;
+            color: #999;
+        }
+        .ym-picker-dropdown {
+            display: none;
+            position: absolute;
+            top: 100%;
+            left: 0;
+            z-index: 1000;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            padding: 12px;
+            width: 220px;
+            margin-top: 4px;
+        }
+        .ym-picker-dropdown.open {
+            display: block;
+        }
+        .ym-picker-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        .ym-picker-header .ym-year-label {
+            font-weight: 600;
+            font-size: 15px;
+            color: #333;
+            min-width: 50px;
+            text-align: center;
+        }
+        .ym-picker-header button {
+            background: none;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            cursor: pointer;
+            padding: 4px 10px;
+            font-size: 14px;
+            color: #555;
+            line-height: 1;
+        }
+        .ym-picker-header button:hover {
+            background: #f0f0f0;
+            border-color: #bbb;
+        }
+        .ym-picker-header button:disabled {
+            opacity: 0.3;
+            cursor: not-allowed;
+        }
+        .ym-month-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 4px;
+        }
+        .ym-month-btn {
+            padding: 6px 4px;
+            border: 1px solid transparent;
+            border-radius: 4px;
+            background: none;
+            cursor: pointer;
+            font-size: 12px;
+            color: #333;
+            text-align: center;
+            transition: all 0.15s;
+        }
+        .ym-month-btn:hover {
+            background: #e8f5e9;
+            border-color: #4a6741;
+        }
+        .ym-month-btn.selected {
+            background: #4a6741;
+            color: white;
+            font-weight: 600;
+        }
+        .ym-month-btn.disabled {
+            color: #ccc;
+            cursor: not-allowed;
+        }
+        .ym-month-btn.disabled:hover {
+            background: none;
+            border-color: transparent;
+        }
         .enrollment-fee-option {
             margin-top: 4px;
         }
@@ -353,12 +457,7 @@
             accent-color: #4a6741;
         }
         .auto-label-select {
-            padding: 6px 10px;
-            border: 1px solid #c8e6c9;
-            border-radius: 6px;
-            font-size: 13px;
-            background: #f1f8e9;
-            color: #2e7d32;
+            /* hidden input - styled via picker wrapper */
         }
         .review-actions {
             text-align: center;
@@ -449,43 +548,129 @@
         let pendingReviews = [];
         let completedResults = [];
 
-        // Generate month options from Date Opened to now + 2 months
-        function generateMonthsFrom(dateOpenedStr) {
-            const months = [];
+        // Year-Month Picker constants
+        const YM_MIN_YEAR = 2023;
+        const YM_MIN_MONTH = 0; // January
+        const YM_MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+        function getYMMaxDate() {
             const now = new Date();
-            const endDate = new Date(now.getFullYear(), now.getMonth() + 2, 1);
-            
-            let startDate;
-            if (dateOpenedStr) {
-                const parts = dateOpenedStr.split('/');
-                if (parts.length === 3) {
-                    let year = parseInt(parts[2]);
-                    if (year < 100) year += 2000;
-                    startDate = new Date(year, parseInt(parts[0]) - 1, 1);
-                } else {
-                    startDate = new Date(now.getFullYear(), now.getMonth() - 24, 1);
-                }
-            } else {
-                startDate = new Date(now.getFullYear(), now.getMonth() - 24, 1);
-            }
-            
-            let d = new Date(startDate);
-            while (d <= endDate) {
-                months.push(d.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }));
-                d = new Date(d.getFullYear(), d.getMonth() + 1, 1);
-            }
-            return months;
+            return { year: now.getFullYear(), month: now.getMonth() + 2 };
+            // +2 months from now
         }
 
-        // Build <option> tags from a month list
-        function monthOptionsHTML(months, selectedValue) {
-            let html = '<option value="">Select month...</option>';
-            for (const m of months) {
-                const sel = (m === selectedValue) ? 'selected' : '';
-                html += `<option value="${m}" ${sel}>${m}</option>`;
-            }
-            return html;
+        function getYMMaxYear() {
+            const max = getYMMaxDate();
+            return max.month > 11 ? max.year + 1 : max.year;
         }
+
+        function isMonthInRange(year, monthIdx) {
+            const max = getYMMaxDate();
+            const maxYear = max.month > 11 ? max.year + 1 : max.year;
+            const maxMonth = max.month > 11 ? max.month - 12 : max.month;
+            if (year < YM_MIN_YEAR) return false;
+            if (year === YM_MIN_YEAR && monthIdx < YM_MIN_MONTH) return false;
+            if (year > maxYear) return false;
+            if (year === maxYear && monthIdx > maxMonth) return false;
+            return true;
+        }
+
+        function formatYMValue(year, monthIdx) {
+            return new Date(year, monthIdx, 1).toLocaleDateString('en-US', { month: 'short', year: 'numeric' });
+        }
+
+        // Create a picker HTML string
+        let ymPickerCounter = 0;
+        function createYMPickerHTML(selectedValue, cssClass, dataAttrs) {
+            const id = 'ym-picker-' + (ymPickerCounter++);
+            const displayText = selectedValue || 'Select month...';
+            const placeholderClass = selectedValue ? '' : 'placeholder';
+            return `
+                <div class="ym-picker-wrapper" id="${id}">
+                    <input type="hidden" class="${cssClass}" ${dataAttrs} value="${selectedValue || ''}">
+                    <button type="button" class="ym-picker-trigger ${placeholderClass}" onclick="toggleYMPicker('${id}')">
+                        <span class="ym-picker-text">${displayText}</span>
+                        <span class="arrow-icon">&#9662;</span>
+                    </button>
+                    <div class="ym-picker-dropdown" id="${id}-dropdown"></div>
+                </div>`;
+        }
+
+        function toggleYMPicker(wrapperId) {
+            const wrapper = document.getElementById(wrapperId);
+            const dropdown = document.getElementById(wrapperId + '-dropdown');
+            const isOpen = dropdown.classList.contains('open');
+
+            // Close all other pickers
+            document.querySelectorAll('.ym-picker-dropdown.open').forEach(d => d.classList.remove('open'));
+
+            if (!isOpen) {
+                const hiddenInput = wrapper.querySelector('input[type="hidden"]');
+                const currentVal = hiddenInput.value;
+                let displayYear;
+                if (currentVal) {
+                    const parsed = new Date(currentVal);
+                    displayYear = parsed.getFullYear();
+                } else {
+                    displayYear = new Date().getFullYear();
+                }
+                renderYMDropdown(wrapperId, displayYear);
+                dropdown.classList.add('open');
+            }
+        }
+
+        function renderYMDropdown(wrapperId, year) {
+            const wrapper = document.getElementById(wrapperId);
+            const dropdown = document.getElementById(wrapperId + '-dropdown');
+            const hiddenInput = wrapper.querySelector('input[type="hidden"]');
+            const currentVal = hiddenInput.value;
+            const maxYear = getYMMaxYear();
+
+            let html = `
+                <div class="ym-picker-header">
+                    <button type="button" onclick="ymChangeYear('${wrapperId}', ${year - 1})" ${year <= YM_MIN_YEAR ? 'disabled' : ''}>&lsaquo;</button>
+                    <span class="ym-year-label">${year}</span>
+                    <button type="button" onclick="ymChangeYear('${wrapperId}', ${year + 1})" ${year >= maxYear ? 'disabled' : ''}>&rsaquo;</button>
+                </div>
+                <div class="ym-month-grid">`;
+
+            for (let m = 0; m < 12; m++) {
+                const inRange = isMonthInRange(year, m);
+                const val = formatYMValue(year, m);
+                const isSelected = (val === currentVal);
+                const cls = (!inRange ? 'disabled' : '') + (isSelected ? ' selected' : '');
+                html += `<button type="button" class="ym-month-btn ${cls}" 
+                    ${inRange ? `onclick="ymSelectMonth('${wrapperId}', ${year}, ${m})"` : ''}
+                    >${YM_MONTH_NAMES[m]}</button>`;
+            }
+
+            html += '</div>';
+            dropdown.innerHTML = html;
+        }
+
+        function ymChangeYear(wrapperId, newYear) {
+            renderYMDropdown(wrapperId, newYear);
+        }
+
+        function ymSelectMonth(wrapperId, year, monthIdx) {
+            const wrapper = document.getElementById(wrapperId);
+            const hiddenInput = wrapper.querySelector('input[type="hidden"]');
+            const trigger = wrapper.querySelector('.ym-picker-trigger');
+            const dropdown = document.getElementById(wrapperId + '-dropdown');
+            const val = formatYMValue(year, monthIdx);
+
+            hiddenInput.value = val;
+            trigger.querySelector('.ym-picker-text').textContent = val;
+            trigger.classList.remove('placeholder');
+            dropdown.classList.remove('open');
+        }
+
+        // Close pickers when clicking outside
+        document.addEventListener('click', function(e) {
+            if (!e.target.closest('.ym-picker-wrapper')) {
+                document.querySelectorAll('.ym-picker-dropdown.open').forEach(d => d.classList.remove('open'));
+            }
+        });
 
         // Drag and drop
         dropZone.addEventListener('dragover', (e) => {
@@ -593,10 +778,6 @@
             for (let ri = 0; ri < pendingReviews.length; ri++) {
                 const review = pendingReviews[ri];
                 const transactions = review.transactions;
-                const months = generateMonthsFrom(review.date_opened);
-                
-                // Store for use in addMonth
-                review._months = months;
                 
                 html += `
                 <div class="review-card" data-review-index="${ri}" data-saved-file="${review.saved_file}">
@@ -638,14 +819,15 @@
                                 <td>
                                     <div class="label-input-group" data-ri="${ri}" data-ti="${t.index}">
                                         <div class="month-select-row">
-                                            <select class="auto-label-select month-select" data-ri="${ri}" data-ti="${t.index}">
-                                                ${monthOptionsHTML(months, prefilledMonth)}
-                                            </select>
+                                            ${createYMPickerHTML(prefilledMonth, 'auto-label-select month-select', `data-ri="${ri}" data-ti="${t.index}"`)}
                                         </div>
                                     </div>
                                 </td>
                             </tr>`;
                     } else if (t.status === 'needs_input') {
+                        const errorMsg = t.show_enrollment_option 
+                            ? 'Please select a month or mark as enrollment fee' 
+                            : 'Please select a month';
                         html += `
                             <tr class="row-needs-input">
                                 <td><strong>${t.date}</strong></td>
@@ -656,9 +838,7 @@
                                         <div id="months-container-${ri}-${t.index}">
                                             <div class="month-select-row">
                                                 <span style="font-size:12px;color:#666;">For:</span>
-                                                <select class="month-select needs-input-select" data-ri="${ri}" data-ti="${t.index}">
-                                                    ${monthOptionsHTML(months, '')}
-                                                </select>
+                                                ${createYMPickerHTML('', 'needs-input-select', `data-ri="${ri}" data-ti="${t.index}"`)}
                                                 <button class="add-month-btn" onclick="addMonth(${ri}, ${t.index})">+ Month</button>
                                             </div>
                                         </div>
@@ -669,7 +849,7 @@
                                                 Enrollment Fee (exclude from VOD)
                                             </label>
                                         </div>` : ''}
-                                        <div class="validation-error hidden" id="error-${ri}-${t.index}">Please select a month or mark as enrollment fee</div>
+                                        <div class="validation-error hidden" id="error-${ri}-${t.index}">${errorMsg}</div>
                                     </div>
                                 </td>
                             </tr>`;
@@ -690,17 +870,13 @@
 
         function addMonth(ri, ti) {
             const container = document.getElementById(`months-container-${ri}-${ti}`);
-            const review = pendingReviews[ri];
-            const months = review._months;
             
             const newRow = document.createElement('div');
             newRow.className = 'month-select-row';
             newRow.style.marginTop = '4px';
             newRow.innerHTML = `
                 <span style="font-size:12px;color:#666;visibility:hidden;">For:</span>
-                <select class="month-select needs-input-select" data-ri="${ri}" data-ti="${ti}">
-                    ${monthOptionsHTML(months, '')}
-                </select>
+                ${createYMPickerHTML('', 'needs-input-select', `data-ri="${ri}" data-ti="${ti}"`)}
                 <button class="remove-month-btn" onclick="this.parentElement.remove()">×</button>
             `;
             container.appendChild(newRow);
@@ -726,9 +902,9 @@
             
             for (const t of review.transactions) {
                 if (t.status === 'auto_labeled') {
-                    const select = card.querySelector(`.auto-label-select[data-ti="${t.index}"]`);
-                    if (select && select.value) {
-                        labels[t.index] = `For: ${select.value}`;
+                    const hiddenInput = card.querySelector(`.auto-label-select[data-ti="${t.index}"]`);
+                    if (hiddenInput && hiddenInput.value) {
+                        labels[t.index] = `For: ${hiddenInput.value}`;
                     }
                 } else if (t.status === 'needs_input') {
                     const checkbox = card.querySelector(`.enrollment-checkbox[data-ti="${t.index}"]`);
@@ -736,10 +912,10 @@
                         labels[t.index] = 'ENROLLMENT_FEE';
                     } else {
                         const container = document.getElementById(`months-container-${ri}-${t.index}`);
-                        const selects = container.querySelectorAll('.needs-input-select');
+                        const hiddenInputs = container.querySelectorAll('.needs-input-select');
                         const selectedMonths = [];
-                        selects.forEach(s => {
-                            if (s.value) selectedMonths.push(s.value);
+                        hiddenInputs.forEach(inp => {
+                            if (inp.value) selectedMonths.push(inp.value);
                         });
                         
                         if (selectedMonths.length === 0) {
