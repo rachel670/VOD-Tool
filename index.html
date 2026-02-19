@@ -551,7 +551,7 @@
         // Year-Month Picker constants
         const YM_MIN_YEAR = 2023;
         const YM_MIN_MONTH = 0; // January
-        const YM_MAX_YEAR = 2029;
+        const YM_MAX_YEAR = 2026;
         const YM_MAX_MONTH = 11; // December
         const YM_MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
@@ -611,22 +611,20 @@
             const dropdown = document.getElementById(wrapperId + '-dropdown');
             const hiddenInput = wrapper.querySelector('input[type="hidden"]');
             const currentVal = hiddenInput.value;
-            let html = `
-                <div class="ym-picker-header">
-                    <button type="button" onclick="ymChangeYear('${wrapperId}', ${year - 1})" ${year <= YM_MIN_YEAR ? 'disabled' : ''}>&lsaquo;</button>
-                    <span class="ym-year-label">${year}</span>
-                    <button type="button" onclick="ymChangeYear('${wrapperId}', ${year + 1})" ${year >= YM_MAX_YEAR ? 'disabled' : ''}>&rsaquo;</button>
-                </div>
-                <div class="ym-month-grid">`;
+            let html = '<div class="ym-picker-header">' +
+                '<button type="button" onclick="ymChangeYear(\'' + wrapperId + '\',' + (year - 1) + ')" ' + (year <= YM_MIN_YEAR ? 'disabled' : '') + '>&lsaquo;</button>' +
+                '<span class="ym-year-label">' + year + '</span>' +
+                '<button type="button" onclick="ymChangeYear(\'' + wrapperId + '\',' + (year + 1) + ')" ' + (year >= YM_MAX_YEAR ? 'disabled' : '') + '>&rsaquo;</button>' +
+                '</div><div class="ym-month-grid">';
 
             for (let m = 0; m < 12; m++) {
                 const inRange = isMonthInRange(year, m);
                 const val = formatYMValue(year, m);
                 const isSelected = (val === currentVal);
                 const cls = (!inRange ? 'disabled' : '') + (isSelected ? ' selected' : '');
-                html += `<button type="button" class="ym-month-btn ${cls}" 
-                    ${inRange ? `onclick="ymSelectMonth('${wrapperId}', ${year}, ${m})"` : ''}
-                    >${YM_MONTH_NAMES[m]}</button>`;
+                html += '<button type="button" class="ym-month-btn ' + cls + '" ' +
+                    (inRange ? 'onclick="ymSelectMonth(\'' + wrapperId + '\',' + year + ',' + m + ')"' : '') +
+                    '>' + YM_MONTH_NAMES[m] + '</button>';
             }
 
             html += '</div>';
@@ -651,7 +649,7 @@
         }
 
         // Close pickers when clicking outside
-        document.addEventListener('click', function(e) {
+        document.addEventListener('mousedown', function(e) {
             if (!e.target.closest('.ym-picker-wrapper')) {
                 document.querySelectorAll('.ym-picker-dropdown.open').forEach(d => d.classList.remove('open'));
             }
